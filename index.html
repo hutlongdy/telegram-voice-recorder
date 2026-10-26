@@ -1,0 +1,125 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Telegram Voice Recorder</title>
+  <style>
+    body {
+      font: 16px Arial, sans-serif;
+      max-width: 600px;
+      margin: 35px auto;
+      padding: 20px;
+      background: #f3f6fb;
+      color: #182538;
+    }
+    section {
+      background: white;
+      padding: 22px;
+      border-radius: 16px;
+    }
+    button {
+      padding: 13px 17px;
+      margin: 5px 5px 5px 0;
+      border: 0;
+      border-radius: 9px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    #start { background: #15803d; color: white; }
+    #stop { background: #25364b; color: white; }
+    #status { margin: 18px 0; overflow-wrap: anywhere; }
+    audio { width: 100%; margin-top: 15px; }
+  </style>
+</head>
+<body>
+<section>
+  <h2>🎙️ Telegram Voice Recorder</h2>
+  <p>Allow microphone access when your browser asks.</p>
+
+  <button id="start">Start recording</button>
+  <button id="stop" disabled>Stop recording</button>
+
+  <p id="status">Ready.</p>
+  <audio id="preview" controls hidden></audio>
+  <p><a id="download" hidden>Download recording</a></p>
+</section>
+
+<script>
+let stream;
+let recorder;
+let chunks = [];
+
+const status = document.getElementById('status');
+const start = document.getElementById('start');
+const stop = document.getElementById('stop');
+const preview = document.getElementById('preview');
+const download = document.getElementById('download');
+
+start.addEventListener('click', async () => {
+  try {
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      throw new Error('This browser does not support direct recording.');
+    }
+
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    chunks = [];
+
+    const types = [
+      'audio/webm;codecs=opus',
+      'audio/ogg;codecs=opus',
+      'audio/mp4'
+    ];
+    const mime = types.find(t => MediaRecorder.isTypeSupported(t));
+
+    recorder = mime
+      ? new MediaRecorder(stream, { mimeType: mime })
+      : new MediaRecorder(stream);
+
+    recorder.ondataavailable = e => {
+      if (e.data.size) chunks.push(e.data);
+    };
+
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, {
+        type: recorder.mimeType || 'audio/webm'
+      });
+      const url = URL.createObjectURL(blob);
+
+      preview.src = url;
+      preview.hidden = false;
+      download.href = url;
+      download.download = 'voice-recording.' +
+        (blob.type.includes('ogg') ? 'ogg' :
+         blob.type.includes('mp4') ? 'm4a' : 'webm');
+      download.textContent = 'Download recording';
+      download.hidden = false;
+
+      status.textContent = 'Recording ready. Download it, then attach it in your Telegram Media Sender.';
+      stream?.getTracks().forEach(t => t.stop());
+      stream = null;
+      start.disabled = false;
+      stop.disabled = true;
+    };
+
+    recorder.start();
+    start.disabled = true;
+    stop.disabled = false;
+    status.textContent = 'Recording…';
+  } catch (e) {
+    status.textContent = 'Microphone error: ' + e.message +
+      '. Check this website’s microphone permission.';
+    stream?.getTracks().forEach(t => t.stop());
+    stream = null;
+    start.disabled = false;
+    stop.disabled = true;
+  }
+});
+
+stop.addEventListener('click', () => {
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+});
+</script>
+</body>
+</html>
